@@ -27,6 +27,7 @@ class XWingSim
 
     def use_homing_missile()
       @homing_missile = true
+      @concussion_missile = false
       @atk_dice = 4
       @have_evade = false
       @have_target_lock = true # homing missiles require target lock but do not consume it
@@ -34,7 +35,9 @@ class XWingSim
 
     def use_concussion_missile()
       @concussion_missile = true
+      @homing_missile = false
       @atk_dice = 4
+      @have_target_lock = false # consumed by concussion missile
     end
 
     def run()
@@ -47,6 +50,7 @@ class XWingSim
 
         dmg = 0
         crit = 0
+        have_blank = false
         for a in 1..@atk_dice
           # 1-2 miss
           # 3-5 hit
@@ -66,6 +70,14 @@ class XWingSim
               crit += 1
             end
           end
+
+          if atk_result <= 2
+            have_blank = true
+          end
+        end
+
+        if have_blank and @concussion_missile
+          dmg += 1
         end
 
         for d in 1..@def_dice
@@ -98,7 +110,15 @@ class XWingSim
       end
 
       puts "Ran #{num_sims} simulations with..."
-      puts "Attacker has #{@atk_dice} dice, #{"no " unless @have_atk_focus}focus, #{"no " unless @have_target_lock}target lock"
+      attacker_descrip = "Attacker has #{@atk_dice} dice, #{"no " unless @have_atk_focus}focus, "
+      if @concussion_missile
+        attacker_descrip << "concussion missile"
+      elsif @homing_missile
+        attacker_descrip << "homing missile"
+      else
+        attacker_descrip << "#{"no " unless @have_target_lock}target lock"
+      end
+      puts attacker_descrip
       puts "Defender has #{@def_dice} dice, #{"no " unless @have_def_focus}focus, #{"no " unless @have_evade}evade"
       puts
       puts "***Results***"
@@ -113,9 +133,21 @@ end
 
 sim = XWingSim.new
 
-sim.have_evade = true
-sim.have_def_focus = true
+# simulates an a-wing vs tie at range 2 w/ TL, conc missile and homing missile
+sim.atk_dice = 2
+sim.def_dice = 3
+sim.have_evade = false
+sim.have_def_focus = false
 sim.have_atk_focus = true
+sim.have_target_lock = true
+
+sim.run
+
+sim.use_concussion_missile
+
+sim.run
+
+sim.use_homing_missile
 
 sim.run
 
