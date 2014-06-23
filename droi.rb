@@ -88,13 +88,14 @@ class XWingSim
         crit_total += crit
       end
 
-      puts "#{@atk_dice} attack dice, #{@def_dice}, defense dice"
-      puts "Attacker has focus: #{@have_atk_focus}"
-      puts "Defender has focus: #{@have_def_focus}"
-      puts "Defender has evade: #{@have_evade}"
+      puts "Ran #{num_sims} simulations with..."
+      puts "Attacker has #{@atk_dice} dice, #{"no " unless @have_atk_focus}focus"
+      puts "Defender has #{@def_dice} dice, #{"no " unless @have_def_focus}focus, #{"no " unless @have_evade}evade"
+      puts
+      puts "***Results***"
       puts "Avg Damage: #{dmg_total.to_f / num_sims}"
-      puts "Chance of 1+ Damage: #{sims_with_dmg.to_f / num_sims}"
-      puts "Chance of 1+ Crit: #{sims_with_crit.to_f / num_sims}"
+      puts "Chance of 1+ Damage: #{(sims_with_dmg.to_f / num_sims) * 100}%"
+      puts "Chance of 1+ Crit: #{(sims_with_crit.to_f / num_sims) * 100}%"
       #puts "Avg Crit: #{crit_total.to_f / num_sims}"
       puts
     end
