@@ -22,12 +22,14 @@ class XWingSim
       @have_evade = args[:have_evade] if args.has_key? :have_evade
       @have_atk_focus = args[:have_atk_focus] if args.has_key? :have_atk_focus
       @have_def_focus = args[:have_def_focus] if args.has_key? :have_def_focus
+      @have_target_lock = args[:have_target_lock] if args.has_key? :have_target_lock
     end
 
     def use_homing_missile()
       @homing_missile = true
       @atk_dice = 4
       @have_evade = false
+      @have_target_lock = true # homing missiles require target lock but do not consume it
     end
 
     def use_concussion_missile()
@@ -46,11 +48,18 @@ class XWingSim
         dmg = 0
         crit = 0
         for a in 1..@atk_dice
-          atk_result = Random.rand(1..8)
           # 1-2 miss
           # 3-5 hit
           # 6 crit
           # 7-8 focus
+          atk_result = Random.rand(1..8)
+
+          if @have_target_lock
+            if atk_result <= 2 or (not @have_atk_focus and atk_result >= 7)
+              atk_result = Random.rand(1..8) # reroll blanks and focus (if no focus token)
+            end
+          end
+
           if (atk_result >= 3 and atk_result <= 6) or (atk_result >= 7 and @have_atk_focus)
             dmg += 1
             if (atk_result == 6)
@@ -60,10 +69,10 @@ class XWingSim
         end
 
         for d in 1..@def_dice
-          def_result = Random.rand(1..8)
           # 1-3 miss
           # 4-6 evade
           # 7-8 focus
+          def_result = Random.rand(1..8)
           if (def_result >= 4 and def_result <= 6) or (def_result >= 7 and @have_def_focus)
             dmg -= 1
           end
@@ -89,7 +98,7 @@ class XWingSim
       end
 
       puts "Ran #{num_sims} simulations with..."
-      puts "Attacker has #{@atk_dice} dice, #{"no " unless @have_atk_focus}focus"
+      puts "Attacker has #{@atk_dice} dice, #{"no " unless @have_atk_focus}focus, #{"no " unless @have_target_lock}target lock"
       puts "Defender has #{@def_dice} dice, #{"no " unless @have_def_focus}focus, #{"no " unless @have_evade}evade"
       puts
       puts "***Results***"
