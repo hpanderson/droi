@@ -9,7 +9,7 @@ class XWingSim
 
 		def initialize(args = {})
 
-      @num_sims = 10000
+      @num_sims = 100000
       @atk_dice = 1
       @def_dice = 1
       @have_evade = false
@@ -42,10 +42,8 @@ class XWingSim
 
     def run()
 
-      sims_with_dmg = 0
-      sims_with_crit = 0
-      dmg_total = 0
-      crit_total = 0
+      dmg_buckets = Hash.new(0) # using hash because it can have an initial value
+      crit_buckets = Hash.new(0)
       for i in 1..@num_sims
 
         dmg = 0
@@ -97,19 +95,19 @@ class XWingSim
         dmg = [0, dmg].max
         crit = [crit, dmg].min
 
-        if dmg > 0
-          sims_with_dmg += 1
-        end
-
-        if crit > 0
-          sims_with_crit += 1
-        end
-
-        dmg_total += dmg
-        crit_total += crit
+        dmg_buckets[dmg] += 1
+        crit_buckets[crit] += 1
       end
 
-      puts "Ran #{num_sims} simulations with..."
+      total_dmg = 0
+      dmg_buckets.each do |dmg, count|
+        total_dmg += dmg.to_f * count
+      end
+      avg_dmg = total_dmg.to_f / @num_sims
+
+      dmg_total = dmg_buckets.values.inject{ |sum, x| sum + x }
+
+      puts "Ran #{@num_sims} simulations with..."
       attacker_descrip = "Attacker has #{@atk_dice} dice, #{"no " unless @have_atk_focus}focus, "
       if @concussion_missile
         attacker_descrip << "concussion missile"
@@ -121,14 +119,38 @@ class XWingSim
       puts attacker_descrip
       puts "Defender has #{@def_dice} dice, #{"no " unless @have_def_focus}focus, #{"no " unless @have_evade}evade"
       puts
-      puts "***Results***"
-      puts "Avg Damage: #{dmg_total.to_f / num_sims}"
-      puts "Chance of 1+ Damage: #{(sims_with_dmg.to_f / num_sims) * 100}%"
-      puts "Chance of 1+ Crit: #{(sims_with_crit.to_f / num_sims) * 100}%"
-      #puts "Avg Crit: #{crit_total.to_f / num_sims}"
+      puts "Avg Damage: #{avg_dmg.round(2)}"
+      puts
+      puts "*** Damage histogram ***"
+      puts ascii_histogram dmg_buckets
+      puts
+      puts "*** Crit histogram ***"
+      puts ascii_histogram crit_buckets
+      puts
       puts
     end
 
+    def ascii_histogram(buckets)
+
+      total_count = buckets.values.inject{ |sum, x| sum + x }
+      max_count = buckets.values.max
+      hist = ""
+      buckets.sort.map do |key, count|
+        pct = (count.to_f / total_count) * 100
+        hist << "#{key} (#{pct.round(1)}%)"
+        if (pct < 10)
+          hist << " "
+        end
+        hist << ": "
+        for i in 1..(pct / 2).to_i
+          hist << "#"
+        end
+        hist << "\n"
+      end
+
+      hist
+
+    end
 end
 
 sim = XWingSim.new
