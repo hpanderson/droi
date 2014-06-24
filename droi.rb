@@ -6,6 +6,8 @@ class XWingSim
 
     @homing_missile = false
     @concussion_missile = false
+    @proton_torps = false
+    @adv_proton_torps = false
 
 		def initialize(args = {})
 
@@ -25,19 +27,111 @@ class XWingSim
       @have_target_lock = args[:have_target_lock] if args.has_key? :have_target_lock
     end
 
-    def use_homing_missile()
-      @homing_missile = true
+    def clear_secondary()
+      @homing_missile = false
       @concussion_missile = false
+      @proton_torps = false
+      @adv_proton_torps = false
+    end
+
+    def use_homing_missile()
+      clear_secondary
+      @homing_missile = true
       @atk_dice = 4
       @have_evade = false
       @have_target_lock = true # homing missiles require target lock but do not consume it
     end
 
     def use_concussion_missile()
+      clear_secondary
       @concussion_missile = true
-      @homing_missile = false
       @atk_dice = 4
       @have_target_lock = false # consumed by concussion missile
+    end
+
+    def use_advanced_torpedoes()
+      clear_secondary
+      @proton_torps = true
+      @atk_dice = 4
+      @have_target_lock = false # consumed by torpedoes
+    end
+
+    def use_advanced_proton_torpedoes()
+      clear_secondary
+      @adv_proton_torps = true
+      @atk_dice = 5
+      @have_target_lock = false # consumed by torpedoes
+    end
+
+    # 1-2 miss
+    # 3-5 hit
+    # 6 crit
+    # 7-8 focus
+    def roll_attack
+      face = Random.rand(1..8)
+      if face <= 2
+        return :blank
+      elsif (face >= 3 and face <= 5)
+        return :hit
+      elsif face == 6
+        return :crit
+      end
+      return :eye
+    end
+
+    # 1-3 miss
+    # 4-6 evade
+    # 7-8 focus
+    def roll_defend
+      face = Random.rand(1..8)
+      if face <= 3
+        return :blank
+      elsif (face >= 4 and face <= 6)
+        return :evade
+      end
+      return :eye
+    end
+
+    def attack(num_dice, focus, rerolls)
+
+        results = Hash.new(0)
+        for a in 1..num_dice
+
+          result = roll_attack()
+          if rerolls > 0 and (result == :blank or (result == :eye and not focus))
+            result = roll_attack()
+            rerolls -= 1
+          end
+
+          results[result] += 1
+        end
+
+        if focus
+          results[:hit] += results[:eye]
+          results[:eye] = 0
+        end
+
+        results
+    end
+
+    def defend(num_dice, focus, evade)
+
+        results = Hash.new(0)
+
+        for a in 1..num_dice
+          results[roll_defend()] += 1
+        end
+
+        if focus
+          results[:evade] += results[:eye]
+          results[:eye] = 0
+        end
+
+        if evade
+          results[:evade] += 1
+        end
+
+        results
     end
 
     def run()
@@ -46,54 +140,32 @@ class XWingSim
       crit_buckets = Hash.new(0)
       for i in 1..@num_sims
 
-        dmg = 0
-        crit = 0
-        have_blank = false
-        for a in 1..@atk_dice
-          # 1-2 miss
-          # 3-5 hit
-          # 6 crit
-          # 7-8 focus
-          atk_result = Random.rand(1..8)
+        attack_results = Hash.new(0)
 
-          if @have_target_lock
-            if atk_result <= 2 or (not @have_atk_focus and atk_result >= 7)
-              atk_result = Random.rand(1..8) # reroll blanks and focus (if no focus token)
-            end
-          end
+        rerolls = @have_target_lock ? @atk_dice : 0 # could allow for more reroll attempts for ibtisam/krassis/howlrunner/etc
+        atk_result = attack(@atk_dice, @have_atk_focus, rerolls)
 
-          if (atk_result >= 3 and atk_result <= 6) or (atk_result >= 7 and @have_atk_focus)
-            dmg += 1
-            if (atk_result == 6)
-              crit += 1
-            end
-          end
-
-          if atk_result <= 2
-            have_blank = true
-          end
+        if @concussion_missile and atk_result[:blank] > 0
+          atk_result[:hit] += 1
+          atk_result[:blank] -= 1
         end
 
-        if have_blank and @concussion_missile
-          dmg += 1
+        def_result = defend(@def_dice, @have_def_focus, @have_evade)
+
+        if atk_result[:hit] > 0
+          evaded = [atk_result[:hit], def_result[:evade]].min
+          atk_result[:hit] -= evaded
+          def_result[:evade] -= evaded
         end
 
-        for d in 1..@def_dice
-          # 1-3 miss
-          # 4-6 evade
-          # 7-8 focus
-          def_result = Random.rand(1..8)
-          if (def_result >= 4 and def_result <= 6) or (def_result >= 7 and @have_def_focus)
-            dmg -= 1
-          end
+        if atk_result[:crit] > 0
+          evaded = [atk_result[:crit], def_result[:evade]].min
+          atk_result[:crit] -= evaded
+          def_result[:evade] -= evaded
         end
 
-        if @have_evade
-          dmg -= 1
-        end
-
-        dmg = [0, dmg].max
-        crit = [crit, dmg].min
+        dmg = atk_result[:hit] + atk_result[:crit]
+        crit = atk_result[:crit]
 
         dmg_buckets[dmg] += 1
         crit_buckets[crit] += 1
@@ -109,12 +181,11 @@ class XWingSim
 
       puts "Ran #{@num_sims} simulations with..."
       attacker_descrip = "Attacker has #{@atk_dice} dice, #{"no " unless @have_atk_focus}focus, "
+      attacker_descrip << "#{"no " unless @have_target_lock}target lock"
       if @concussion_missile
-        attacker_descrip << "concussion missile"
+        attacker_descrip << ", concussion missile"
       elsif @homing_missile
-        attacker_descrip << "homing missile"
-      else
-        attacker_descrip << "#{"no " unless @have_target_lock}target lock"
+        attacker_descrip << ", homing missile"
       end
       puts attacker_descrip
       puts "Defender has #{@def_dice} dice, #{"no " unless @have_def_focus}focus, #{"no " unless @have_evade}evade"
