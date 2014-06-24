@@ -49,7 +49,7 @@ class XWingSim
       @have_target_lock = false # consumed by concussion missile
     end
 
-    def use_advanced_torpedoes()
+    def use_proton_torpedoes()
       clear_secondary
       @proton_torps = true
       @atk_dice = 4
@@ -98,12 +98,46 @@ class XWingSim
         for a in 1..num_dice
 
           result = roll_attack()
-          if rerolls > 0 and (result == :blank or (result == :eye and not focus))
+          should_reroll = false
+          if rerolls > 0
+            if result == :blank
+              should_reroll = true # always reroll blanks
+            elsif result == :eye and not focus
+              # only reroll eyes if you don't have a focus
+              if @proton_torps
+                # save one eye for proton torpedoes to crit with, if present
+                if results[:eye] >= 1
+                  should_reroll = true
+                end
+              elsif not focus
+                should_reroll = true
+              end
+            end
+
+          end
+
+          if should_reroll
             result = roll_attack()
             rerolls -= 1
           end
 
           results[result] += 1
+        end
+
+        if @proton_torps and results[:eye] > 0
+          results[:crit] += 1
+          results[:eye] -= 1
+        end
+
+        if @adv_proton_torps
+          blanks = [results[:blank], 3].min
+          results[:eye] += blanks
+          results[:blank] -= blanks
+        end
+
+        if @concussion_missile and results[:blank] > 0
+          results[:hit] += 1
+          results[:blank] -= 1
         end
 
         if focus
@@ -144,12 +178,6 @@ class XWingSim
 
         rerolls = @have_target_lock ? @atk_dice : 0 # could allow for more reroll attempts for ibtisam/krassis/howlrunner/etc
         atk_result = attack(@atk_dice, @have_atk_focus, rerolls)
-
-        if @concussion_missile and atk_result[:blank] > 0
-          atk_result[:hit] += 1
-          atk_result[:blank] -= 1
-        end
-
         def_result = defend(@def_dice, @have_def_focus, @have_evade)
 
         if atk_result[:hit] > 0
@@ -186,6 +214,10 @@ class XWingSim
         attacker_descrip << ", concussion missile"
       elsif @homing_missile
         attacker_descrip << ", homing missile"
+      elsif @proton_torps
+        attacker_descrip << ", proton torpedoes"
+      elsif @adv_proton_torps
+        attacker_descrip << ", advanced proton torpedoes"
       end
       puts attacker_descrip
       puts "Defender has #{@def_dice} dice, #{"no " unless @have_def_focus}focus, #{"no " unless @have_evade}evade"
